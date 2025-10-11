@@ -159,18 +159,7 @@ if __name__ == "__main__":
                                  eval_flag=eval_flag, period=eval_period)
 
     no_improve_count = 0
-    suou = "SCNet/networks/vit_seg_modeling.py"
-
-    destination_dir = os.path.join(save_dir, 'vit_seg_modeling.py')
-
-    shutil.copy2(suou, destination_dir)
-
-    suou = "SCNet/train.py"
-    source_file = 'SCNet/utils/utils_fit.py'
-    destination_dir = os.path.join(save_dir, 'utils_fit.py')
-    destination_dir1 = os.path.join(save_dir, 'train.py')
-    shutil.copy2(source_file, destination_dir)
-    shutil.copy2(suou, destination_dir1)
+    
     for epoch in range(init_epoch, unFreeze_epoch):
         set_optimizer_lr(optimizer, lr_scheduler_func, epoch)
         gen = DataLoader(train_dataset, shuffle=shuffle, batch_size=batch_size, num_workers=num_workers,
@@ -180,6 +169,7 @@ if __name__ == "__main__":
         no_improve_count = fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, epoch,
                                          epoch_step, epoch_step_val, gen, gen_val, unFreeze_epoch, loss_fuc,
                                          num_classes, save_dir, no_improve_count)
+
 
 
 
