@@ -19,7 +19,7 @@ train_data = pd.read_json(train_annotations_path)
  
 for i in range(len(train_data)):
  
-    img_relative_path = train_data['img'][i]  # 示例："some/path/to/image.png"
+    img_relative_path = train_data['img'][i] 
     img_name = os.path.basename(img_relative_path)
 
 
@@ -50,4 +50,5 @@ for i in range(len(train_data)):
         cv2.imwrite(binary_mask_path, label)
 
         print(f' {binary_mask_path} save')
+
 
