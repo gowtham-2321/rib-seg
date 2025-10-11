@@ -16,12 +16,12 @@ target_dirs = {
 }
 image_dir = '/test'
 
-# 创建目标文件夹
+ 
 for target in target_dirs.values():
     if not os.path.exists(target):
         os.makedirs(target)
 
-# 定义颜色，调整RGB值使其变浅
+ 
 color = [(255, 153, 255), (153, 255, 204), (153, 153, 255), (204, 255, 153),
          (255, 153, 204), (255, 204, 153), (153, 204, 153), (153, 153, 204),
          (153, 204, 255), (204, 153, 153), (204, 153, 204), (153, 255, 153),
@@ -31,7 +31,7 @@ color = [(255, 153, 255), (153, 255, 204), (153, 153, 255), (204, 255, 153),
          (153, 255, 102), (153, 102, 255), (102, 153, 255), (255, 153, 102),
          (204, 102, 153), (102, 204, 153)]
 
-# 定义索引组合和对应的目标文件夹
+ 
 index_combinations = {
     (24, 25): ("Clavicles1", "Clavicles2"),
     (26, 27): ("Scapulas1", "Scapulas2"),
@@ -42,7 +42,7 @@ index_combinations = {
 
 }
 
-# 添加颜色组合，确保每组颜色不同且颜色变浅
+ 
 combination_colors = {
     #(24, 25): ([(255, 255, 255), (255, 204, 204)]),
     #(26, 27): ([(153, 255, 255), (204, 255, 255)]),
@@ -71,11 +71,12 @@ for imgname in tqdm(os.listdir(image_dir)):
         img[:, :, 1] = cv2.bitwise_or(img[:, :, 1], color[i][1] * img1)
         img[:, :, 2] = cv2.bitwise_or(img[:, :, 2], color[i][2] * img1)
 
-    # 保存普通rib图像
+ 
     cv2.imwrite(os.path.join(target_dirs["rib1"], imgname), img)
 
     img1 = cv2.imread(os.path.join(image_dir, imgname), 0)
     img1 = cv2.resize(img1, (448, 448))
     img1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2BGR)
     img = cv2.addWeighted(img, 0.5, img1, 0.8, 0)
+
     cv2.imwrite(os.path.join(target_dirs["rib2"], imgname), img)
