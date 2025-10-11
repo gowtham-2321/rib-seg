@@ -15,7 +15,7 @@ from scipy.spatial.distance import directed_hausdorff, cdist
 def calalll(imgdir1, imgdir2):
     total_imgs = len(os.listdir(imgdir1))
     if total_imgs == 0:
-        return 0, 0, 0, 0, 0, 0, 0  # 如果没有图像，返回0
+        return 0, 0, 0, 0, 0, 0, 0 
 
     miou = mdsc = accuracy = specificity = sensitivity = hausdorff_distance = assd = 0
 
@@ -33,7 +33,7 @@ def calalll(imgdir1, imgdir2):
         img1 = img1.astype(np.bool_)
         img2 = img2.astype(np.bool_)
 
-        # 计算交并比(IoU)和Dice相似系数(DSC)
+
         img3 = img1 & img2
         img4 = img1 | img2
         iou = img3.sum() / img4.sum() if img4.sum() != 0 else 0
@@ -41,7 +41,7 @@ def calalll(imgdir1, imgdir2):
         dsc = 2 * img3.sum() / (img4.sum() + img3.sum()) if (img4.sum() + img3.sum()) != 0 else 0
         mdsc += dsc
 
-        # 计算准确性，特异性，敏感性
+ 
         tp = (img1 & img2).sum()
         tn = (~img1 & ~img2).sum()
         fp = (~img1 & img2).sum()
@@ -50,18 +50,18 @@ def calalll(imgdir1, imgdir2):
         specificity += tn / (tn + fp) if (tn + fp) != 0 else 0
         sensitivity += tp / (tp + fn) if (tp + fn) != 0 else 0
 
-        # 计算Hausdorff距离
+
         y_true, x_true = np.where(img1)
         y_pred, x_pred = np.where(img2)
-        if y_true.size and y_pred.size:  # 确保图像不全是黑色的
+        if y_true.size and y_pred.size:  
             hausdorff_dist = max(directed_hausdorff(np.stack([y_true, x_true], axis=1), np.stack([y_pred, x_pred], axis=1))[0],
                                  directed_hausdorff(np.stack([y_pred, x_pred], axis=1), np.stack([y_true, x_true], axis=1))[0])
         else:
             hausdorff_dist = 0
         hausdorff_distance += hausdorff_dist
 
-        # 计算平均对称表面距离(ASSD)
-        if y_true.size and y_pred.size:  # 确保图像不全是黑色的
+
+        if y_true.size and y_pred.size:  
             true_points = np.stack([y_true, x_true], axis=1)
             pred_points = np.stack([y_pred, x_pred], axis=1)
             dist_matrix = scipy.spatial.distance.cdist(true_points, pred_points, 'euclidean')
@@ -152,7 +152,7 @@ if __name__ == "__main__":
     num_classes = 20
     backbone = 'resnet50'
     input_shape = (448, 448)
-    # image_dir = '/media/20TB/madexin3/allnewimg'
+
     image_dir = '/test'
     save_pdir = '/Model'
     modelsort = "/best"
@@ -167,15 +167,15 @@ if __name__ == "__main__":
     mhd_save = save_pdir + modelsort + '/pred_mhd.txt'
     massd_save = save_pdir + modelsort + '/pred_assd.txt'
     transform = transforms.Compose([
-        transforms.ToPILImage(),  # 将图像变成PIL格式    输入为[H, W, C]输出为[H, W, C]
-        transforms.ToTensor(),  # 将PIL图像转换为tensor    输入为[H, W, C]输出为[C, H, W]
+        transforms.ToPILImage(), 
+        transforms.ToTensor(), 
     ])
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--root_path', type=str,
                         default='../data/Synapse/train_npz', help='root dir for data')
     parser.add_argument('--dataset', type=str,
-                        default='Synapse', help='experiment_name')  # 突触
+                        default='Synapse', help='experiment_name')  
     parser.add_argument('--list_dir', type=str,
                         default='./lists/lists_Synapse', help='list dir')
     parser.add_argument('--num_classes', type=int,
@@ -214,8 +214,8 @@ if __name__ == "__main__":
     unet = ViT_seg(config_vit, img_size=448, num_classes=num_classes)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    unet.load_state_dict(torch.load(model_path, map_location=device), strict=False)  # 加载模型参数
-    unet = unet.eval()  # 测试模式
+    unet.load_state_dict(torch.load(model_path, map_location=device), strict=False) 
+    unet = unet.eval()  
     unet = nn.DataParallel(unet)
     unet = unet.cuda()
 
@@ -226,14 +226,10 @@ if __name__ == "__main__":
         image = cv2.imread(imgpath, 0)
         image = cv2.resize(image, (448, 448))
 
-        # 无归一化使用
-        '''
         image = np.expand_dims(image, 0).repeat(3, axis=0)    # [3, 448, 448]
         image = np.expand_dims(image, 0)                      # [b, 3, 448, 448]
         image = torch.from_numpy(image).type(torch.FloatTensor)
-        '''
 
-        # 归一化使用
         image = np.expand_dims(image, -1).repeat(3, axis=-1)  # [448, 448, 3]
         image = transform(image)  # [3, 448, 448]
         image = image.unsqueeze(0)  # [b, 3, 448, 448]
@@ -242,13 +238,13 @@ if __name__ == "__main__":
         pred = torch.sigmoid(pred)
 
         pred = pred.detach().cpu().numpy()
-        # pred = t_crf(image.cpu().numpy(), pred)     # 后处理CRF
+        # pred = t_crf(image.cpu().numpy(), pred)   
 
         for i in range(num_classes):
             save_path = os.path.join(pred_save_path, str(i))
             if not os.path.exists(save_path):
                 os.makedirs(save_path)
-            savepath = os.path.join(save_path, img)  # 拼接存储路径
+            savepath = os.path.join(save_path, img)
 
             pred_image = pred[0, i, :, :]
             pred_image = pred_image * 255
@@ -257,10 +253,8 @@ if __name__ == "__main__":
             pred_image = pred_image.astype(np.uint8)
             cv2.imwrite(savepath, pred_image)
 
-    print(
-        '==================================================Compute  MIOU==================================================')
-    classes = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18',
-               '19',]#'20', '21', '22', '23','24', '25', '26','27', '28', '29','30', '31'
+    print('==================================================Compute  MIOU==================================================')
+    classes = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18','19',]
     iou_list = []
     iou_str_list = []
     dsc_list = []
@@ -288,8 +282,7 @@ if __name__ == "__main__":
         dsc_list.append(mdsc)
         mdsc_str = '第{}标签的mdsc: {}'.format(str(int(cls) + 1), mdsc)
         dsc_str_list.append(mdsc_str)
-
-    # 计算不同范围的平均值
+ 
     mmiou_0_23 = sum(iou_list[0:24]) / 24
     mmiou_24_25 = sum(iou_list[24:26]) / 2
     mmiou_26_27 = sum(iou_list[26:28]) / 2
@@ -297,14 +290,13 @@ if __name__ == "__main__":
     mmiou_30 = sum(iou_list[30:31]) if len(iou_list) >= 31 else 0
     mmiou_31 = sum(iou_list[31:32]) if len(iou_list) >= 31 else 0
 
-    # 计算总体平均值
+  
     mmiou_str = sum(iou_list) / len(iou_list)
 
-    # 构建结果字符串
+ 
     miou_str = '\n'.join(
         iou_str_list) + f'\n平均miou指标（0-23）：{mmiou_0_23}\n平均miou指标（24-25）：{mmiou_24_25}\n平均miou指标（26-27）：{mmiou_26_27}\n平均miou指标（28-29）：{mmiou_28_29}\n平均miou指标（30）：{mmiou_30}\n平均miou指标（31）：{mmiou_31}'
-
-    # 打印平均指标
+ 
     print('平均指标：', mmiou_str)
     print('肋骨平均指标（0-23）：', mmiou_0_23)
     print('锁骨平均指标（24-25）：', mmiou_24_25)
@@ -319,8 +311,8 @@ if __name__ == "__main__":
     mmdsc_24_25 = sum(dsc_list[24:26]) / 2
     mmdsc_26_27 = sum(dsc_list[26:28]) / 2
     mmdsc_28_29 = sum(dsc_list[28:30]) / 2
-    mmdsc_30 = sum(dsc_list[30:31]) if len(dsc_list) >= 31 else 0  # 计算范围为 30 的平均值
-    mmdsc_31 = sum(dsc_list[31:32]) if len(dsc_list) >= 31 else 0  # 计算范围为 30 的平均值
+    mmdsc_30 = sum(dsc_list[30:31]) if len(dsc_list) >= 31 else 0   
+    mmdsc_31 = sum(dsc_list[31:32]) if len(dsc_list) >= 31 else 0  
 
     mmdsc_str = sum(dsc_list) / len(dsc_list)
     mdsc_str = '\n'.join(
@@ -334,3 +326,4 @@ if __name__ == "__main__":
     print('纵隔平均指标（31）：', mmdsc_31)
     with open(mdsc_save, 'w') as d:
         d.write(mdsc_str)
+
