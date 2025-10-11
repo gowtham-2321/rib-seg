@@ -23,12 +23,11 @@ target_dirs = {
     "Mediastinum2": path0 + "/all/Mediastinum2"
 }
 
-# 创建目标文件夹
+ 
 for target in target_dirs.values():
     if not os.path.exists(target):
         os.makedirs(target)
-
-# 定义颜色，调整RGB值使其变浅
+ 
 color = [(255, 153, 255), (153, 255, 204), (153, 153, 255), (204, 255, 153),
          (255, 153, 204), (255, 204, 153), (153, 204, 153), (153, 153, 204),
          (153, 204, 255), (204, 153, 153), (204, 153, 204), (153, 255, 153),
@@ -38,7 +37,7 @@ color = [(255, 153, 255), (153, 255, 204), (153, 153, 255), (204, 255, 153),
          (153, 255, 102), (153, 102, 255), (102, 153, 255), (255, 153, 102),
          (204, 102, 153), (102, 204, 153),]
 
-# 定义索引组合和对应的目标文件夹
+ 
 index_combinations = {
     (24, 25): ("Clavicles1", "Clavicles2"),
     (26, 27): ("Scapulas1", "Scapulas2"),
@@ -48,8 +47,7 @@ index_combinations = {
 
 
 }
-
-# 添加颜色组合，确保每组颜色不同且颜色变浅
+ 
 combination_colors = {
     #(24, 25): ([(255, 255, 255), (255, 204, 204)]),
     #(26, 27): ([(153, 255, 255), (204, 255, 255)]),
@@ -78,7 +76,7 @@ for imgname in tqdm(os.listdir('/testimage')):
         img[:, :, 1] = cv2.bitwise_or(img[:, :, 1], color[i][1] * img1)
         img[:, :, 2] = cv2.bitwise_or(img[:, :, 2], color[i][2] * img1)
 
-    # 保存普通rib图像
+ 
     cv2.imwrite(os.path.join(target_dirs["rib1"], imgname), img)
 
     img1 = cv2.imread(os.path.join('/testimage', imgname), 0)
@@ -86,8 +84,7 @@ for imgname in tqdm(os.listdir('/testimage')):
     img1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2BGR)
     img = cv2.addWeighted(img, 0.5, img1, 0.8, 0)
     cv2.imwrite(os.path.join(target_dirs["rib2"], imgname), img)
-
-    # 处理特定索引组合的图像
+ 
     for indices, (target1, target2) in index_combinations.items():
         combined_img = np.zeros([448, 448, 3], dtype=np.uint8)
         colors = combination_colors[indices]
@@ -103,7 +100,7 @@ for imgname in tqdm(os.listdir('/testimage')):
             combined_img[:, :, 1] = cv2.bitwise_or(combined_img[:, :, 1], col[1] * img1)
             combined_img[:, :, 2] = cv2.bitwise_or(combined_img[:, :, 2], col[2] * img1)
 
-        # 保存特定索引组合的图像
+ 
         cv2.imwrite(os.path.join(target_dirs[target1], imgname), combined_img)
 
         img1 = cv2.imread(os.path.join('/testimage', imgname), 0)
@@ -111,5 +108,6 @@ for imgname in tqdm(os.listdir('/testimage')):
         img1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2BGR)
         img = cv2.addWeighted(combined_img, 0.5, img1, 0.8, 0)
         cv2.imwrite(os.path.join(target_dirs[target2], imgname), img)
+
 
 
