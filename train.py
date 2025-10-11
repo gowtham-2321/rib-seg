@@ -43,7 +43,7 @@ if __name__ == "__main__":
     save_dir = '/save_dir'
     data_path = '/data_split_file'
     image_path = 'Dataset/images'
-    loss_fuc = "Diceloss"
+    loss_fuc = "LTloss"
     parser = argparse.ArgumentParser()
     parser.add_argument('--root_path', type=str,
                         default='../data/Synapse/train_npz', help='root dir for data')
@@ -231,4 +231,5 @@ if __name__ == "__main__":
         no_improve_count = fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, epoch,
                                          epoch_step, epoch_step_val, gen, gen_val, unFreeze_epoch, loss_fuc,
                                          num_classes, save_dir, no_improve_count)
+
 
