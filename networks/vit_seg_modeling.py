@@ -404,21 +404,11 @@ class VisionTransformer(nn.Module):
         self.config = config
 
     def forward(self, x):
-
         if x.size()[1] == 1:
             x = x.repeat(1,3,1,1)
-        #print("vitsegmodeling_x.shape", x.shape) #vitsegmodeling_x.shape torch.Size([8, 3, 448, 448])
-
-        #print(x.size())
         x, attn_weights, features = self.transformer(x)  # (B, n_patch, hidden)
-
-        #print(x.shape)torch.Size([4, 784, 768])
-
         x = self.decoder(x, features)
-
         logits = self.segmentation_head(x)
-        #print("vitsegmodeling_logits.shape",logits.shape) #vitsegmodeling_logits.shape torch.Size([8, 24, 448, 448])
-
         return logits
 
     def load_from(self, weights):
