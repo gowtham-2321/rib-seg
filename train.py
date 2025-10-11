@@ -19,7 +19,7 @@ import os
 
 if __name__ == "__main__":
     cuda = True
-    num_classes = 24
+    num_classes = 20
     backbone = "resnet50"
     pretrained = False
     model_path = 'model_data/imagenet21k+imagenet2012_R50+ViT-B_16.npz'
@@ -27,8 +27,8 @@ if __name__ == "__main__":
     init_epoch = 0
     freeze_epoch = 0
     unFreeze_epoch = 300
-    freeze_batch_size = 3
-    unfreeze_batch_size = 3
+    freeze_batch_size = 6
+    unfreeze_batch_size = 6
     freeze_train = False
     init_lr = 1e-4
     min_lr = init_lr * 0.01
@@ -48,7 +48,7 @@ if __name__ == "__main__":
     parser.add_argument('--root_path', type=str,
                         default='../data/Synapse/train_npz', help='root dir for data')
     parser.add_argument('--dataset', type=str,
-                        default='Synapse', help='experiment_name')  # 突触
+                        default='Synapse', help='experiment_name')  
     parser.add_argument('--list_dir', type=str,
                         default='./lists/lists_Synapse', help='list dir')
     parser.add_argument('--num_classes', type=int,
@@ -75,7 +75,7 @@ if __name__ == "__main__":
     parser.add_argument('--vit_patches_size', type=int,
                         default=16, help='vit_patches_size, default is 16')
     parser.add_argument('--backbone', type=str,
-                        default='SCNet', help='list dir')
+                        default='LTNet', help='list dir')
     parser.add_argument('--gpu', type=str,
                         default='3', help='list dir')
 
@@ -97,7 +97,7 @@ if __name__ == "__main__":
             ##########################################    Unet   #######################################################
             model = UNet(n_classes=num_classes)
 
-        elif args.backbone == "SCNet":
+        elif args.backbone == "LTNet":
             model = ViT_seg(config_vit, img_size=448, num_classes=num_classes)
             model.load_from(weights=np.load(model_path))
 
@@ -231,3 +231,4 @@ if __name__ == "__main__":
         no_improve_count = fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, epoch,
                                          epoch_step, epoch_step_val, gen, gen_val, unFreeze_epoch, loss_fuc,
                                          num_classes, save_dir, no_improve_count)
+
