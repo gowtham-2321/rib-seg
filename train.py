@@ -75,7 +75,7 @@ if __name__ == "__main__":
     parser.add_argument('--vit_patches_size', type=int,
                         default=16, help='vit_patches_size, default is 16')
     parser.add_argument('--backbone', type=str,
-                        default='LTNet', help='list dir')
+                        default='TRANSUNET', help='list dir')
     parser.add_argument('--gpu', type=str,
                         default='3', help='list dir')
 
@@ -96,7 +96,7 @@ if __name__ == "__main__":
             ##########################################    Unet   #######################################################
             model = UNet(n_classes=num_classes)
 
-        elif args.backbone == "LTNet":
+        elif args.backbone == "TRANSUNET":
             model = ViT_seg(config_vit, img_size=448, num_classes=num_classes)
             model.load_from(weights=np.load(model_path))
 
@@ -169,6 +169,7 @@ if __name__ == "__main__":
         no_improve_count = fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, epoch,
                                          epoch_step, epoch_step_val, gen, gen_val, unFreeze_epoch, loss_fuc,
                                          num_classes, save_dir, no_improve_count)
+
 
 
 
