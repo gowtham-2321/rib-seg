@@ -6,7 +6,7 @@ import torch.optim as optim
 import argparse
  
 from torch.utils.data import DataLoader
-from networks.vit_seg_modeling import SCNet as ViT_seg
+from networks.vit_seg_modeling import VisionTransformer as ViT_seg
 from networks.vit_seg_modeling import CONFIGS as CONFIGS_ViT_seg
 import shutil
 from nets.unet_training import get_lr_scheduler, set_optimizer_lr, weights_init
@@ -180,6 +180,7 @@ if __name__ == "__main__":
         no_improve_count = fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, epoch,
                                          epoch_step, epoch_step_val, gen, gen_val, unFreeze_epoch, loss_fuc,
                                          num_classes, save_dir, no_improve_count)
+
 
 
 
