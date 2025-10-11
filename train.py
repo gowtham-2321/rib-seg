@@ -4,7 +4,7 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.optim as optim
 import argparse
-from networks.vmunet import VMUNet
+ 
 from torch.utils.data import DataLoader
 from networks.vit_seg_modeling import SCNet as ViT_seg
 from networks.vit_seg_modeling import CONFIGS as CONFIGS_ViT_seg
@@ -87,8 +87,7 @@ if __name__ == "__main__":
     config_vit = CONFIGS_ViT_seg[args.vit_name]
     config_vit.n_classes = args.num_classes
     config_vit.n_skip = args.n_skip
-    print(
-        "##########################################" + args.backbone + "#######################################################")
+    
 
     if args.vit_name.find('R50') != -1:
         config_vit.patches.grid = (
@@ -101,57 +100,7 @@ if __name__ == "__main__":
             model = ViT_seg(config_vit, img_size=448, num_classes=num_classes)
             model.load_from(weights=np.load(model_path))
 
-        ####    ######################################    Unet++   #######################################################
-        elif args.backbone == "unetplus":
-            model = UNetPuls(num_classes=num_classes, supervised=False)
 
-            # model.load_from(weights=np.load(model_path))
-
-        ####    ######################################    AttenUnet   #######################################################
-        elif args.backbone == "attunet":
-            model = AttU_Net(num_classes=num_classes)
-
-            # model.load_from(weights=np.load(model_path))
-
-        ####    ######################################    UCtranUnet   #######################################################
-        elif args.backbone == "uctransNet":
-            ucconfig_vit = ucconfig.get_CTranS_config()
-            model = UCTransNet(ucconfig_vit, n_channels=ucconfig.n_channels, n_classes=num_classes)
-
-            # model.load_from(weights=np.load(model_path))
-
-        ####    ######################################    SwinUnet   #######################################################
-        elif args.backbone == "swinunet":
-            model = swinunet(num_classes=num_classes)
-        ####    ######################################    transUnet   #######################################################
-
-        elif args.backbone == "unext":
-            model = UNext(num_classes=num_classes)
-        elif args.backbone == "swinunetr":
-            model = swinunetr(img_size=448, in_channels=3, out_channels=num_classes)
-        elif args.backbone == "mamba":
-            model = VMUNet(  # 10
-                num_classes=24,
-                input_channels=3,
-                depths=[2, 2, 2, 2],
-                depths_decoder=[2, 2, 2, 1],
-                drop_path_rate=0.2,
-                load_ckpt_path="/home/zhaoxiaowei/vssmsmall_dp03_ckpt_epoch_238.pth"
-            )
-            model.load_from()
-
-    '''
-    for k,v in model.transformer.named_parameters():
-        v.requires_grad = False
-    for k,v in model.decoder.named_parameters():
-        v.requires_grad = False
-    #for k,v in model.decoder2.named_parameters():
-        #v.requires_grad = False
-    for k,v in model.segmentation_head.named_parameters():
-        v.requires_grad = False
-    #for k,v in model.segmentation_head2.named_parameters():
-        #v.requires_grad = False
-'''
 
     time_str = datetime.datetime.strftime(datetime.datetime.now(), '%Y_%m_%d_%H_%M')
     save_dir = os.path.join(save_dir, "ModelLabel" + time_str)
@@ -231,6 +180,7 @@ if __name__ == "__main__":
         no_improve_count = fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, epoch,
                                          epoch_step, epoch_step_val, gen, gen_val, unFreeze_epoch, loss_fuc,
                                          num_classes, save_dir, no_improve_count)
+
 
 
 
