@@ -95,13 +95,57 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
 
         elif loss_fuc == "TPCloss":
 
+            sigoutputs = torch.sigmoid(outputs.clone())
+            pred_binary = sigoutputs * 255
+            pred_binary[pred_binary <= 127] = 0
+            pred_binary[pred_binary > 127] = 1
+            ####################################
+            repred_binary = sigoutputs * 255
+            repred_binary[repred_binary <= 127] = 1
+            repred_binary[repred_binary > 127] = 0
+            ####################################
+            true_binary = pngs.clone()
+            interlist = []
+            contlist = []
+ 
+            np_kernel = torch.tensor([[1, 1, 1, 1, 1],[1, 1, 1, 1, 1],[1, 1, 1, 1, 1],[1, 1, 1, 1, 1],[1, 1, 1, 1, 1]], dtype=torch.float32)
+            connectivity_kernel = torch.unsqueeze(torch.unsqueeze(np_kernel, 0), 0).cuda()
+ 
+            for i in range(20):
+                copied_pred_overlap = pred_binary[:, i:i + 1, :, :].expand(-1, 20, -1, -1)
+                copied_true_binary = true_binary[:, i:i + 1, :, :].expand(-1, 20, -1, -1)
+                pred_overlap = copied_pred_overlap * true_binary
+                true_overlap = copied_true_binary * true_binary
+                rev_true_overlap = torch.logical_not(true_overlap)
+                true_pred_overlap = pred_overlap * rev_true_overlap
+                true_pred_overlap = torch.sum(true_pred_overlap, dim=1, keepdim=True)
 
+                interlist.append(true_pred_overlap)
+          
+                pred_channel = pred_binary[:, i, :, :].unsqueeze(1)
+                
+                expend_pred = F.conv2d(pred_channel, connectivity_kernel, stride=1, padding=2)   # 5*5
+                
+                expend_pred = expend_pred.squeeze(1)
+                expend_pred[expend_pred <= 1] = 0
+                expend_pred[expend_pred > 1] = 1
+
+                truepred = expend_pred * repred_binary[:, i, :, :]
+
+                intersection_map = truepred * true_binary[:, i, :, :]
+
+                contlist.append(intersection_map)
            
+            criticals_conet_map = torch.stack(contlist, dim=1)
+            criticals_inter_map = torch.cat(interlist, dim=1)
+            criticals_map = criticals_inter_map + criticals_conet_map
+            criticals_map[criticals_map <= 0] = 0
+            criticals_map[criticals_map > 0] = 1
 
-            # 计算TPCloss
+    
             loss = trainDice_loss(outputs, pngs, criticals_map)
             # print(loss.shape)
-            # 用 total_loss 进行反向传播和优化
+   
         loss.backward()
         optimizer.step()
 
