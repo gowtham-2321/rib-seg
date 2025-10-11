@@ -18,10 +18,10 @@ from straug.process import Posterize, Solarize, Invert, Equalize, AutoContrast, 
 from straug.warp import Curve, Distort, Stretch
 from straug.weather import Fog, Snow, Frost, Rain, Shadow
 from utils.utils import cvtColor, preprocess_input
-from bert_embedding import BertEmbedding
 
 
 def erasing(image):
+
     image = Image.fromarray(image)
     w, h = image.size
 
@@ -47,25 +47,23 @@ def erasing(image):
 
     return image
 
-
 def straug_auto(image, prob):
     n = 3
     rng = np.random.default_rng()
     ops = []
-    # ops.extend([Distort(rng)])
+    #ops.extend([Distort(rng)])
     ops.extend([GaussianNoise(rng), ShotNoise(rng), ImpulseNoise(rng), SpeckleNoise(rng)])
-    # ops.extend([GaussianBlur(rng), MotionBlur(rng), DefocusBlur(rng), GlassBlur(rng), ZoomBlur(rng)])
+    #ops.extend([GaussianBlur(rng), MotionBlur(rng), DefocusBlur(rng), GlassBlur(rng), ZoomBlur(rng)])
     ops.extend([Contrast(rng), Brightness(rng)])
     ops.extend([Fog(rng), Snow(rng), Frost(rng), Rain(rng), Shadow(rng)])
     ops.extend([Posterize(rng), Invert(rng), Equalize(rng)])
-    # ops.extend([Invert(rng)])
+    #ops.extend([Invert(rng)])
     image = Image.fromarray(image)
     augment = np.random.choice(ops, n)
     for op in augment:
-        image = op(image, mag=np.random.randint(-1, 3), prob=prob)
+        image = op(image, mag=np.random.randint(-1,3), prob=prob)
     image = np.asarray(image)
     return image
-
 
 class Distort:
     def __init__(self, rng=1):
@@ -149,41 +147,38 @@ class Distort:
 
         return img
 
-
-def augmentationimage(jpgs, labels):
+def augmentationimage(jpgs,labels):
     for i in range(jpgs.shape[0]):
-        jpg = jpgs[i, 0, :, :]
+        jpg = jpgs[i,0,:,:]
         r_move_x = random.randint(-20, 20)
         r_move_y = random.randint(-20, 20)
-        r_rotate_angle = random.randint(-10, 10)  # 旋转方向取（-10，10）中的随机整数值，正为逆时针，负为顺势针
-        m_move = np.float32([[1, 0, r_move_x], [0, 1, r_move_y]])  # 生成位移矩阵
+        r_rotate_angle = random.randint(-10, 10)   
+        m_move = np.float32([[1, 0, r_move_x], [0, 1, r_move_y]])   
         seed = random.randint(0, 1000000)
-        jpg = erasing(jpg)  # erasing image for 3 times
-        jpg = erasing(jpg)  # erasing image for 3 times
-        jpg = erasing(jpg)  # erasing image for 3 times
-        jpg = cv2.warpAffine(jpg, m_move, (jpg.shape[0], jpg.shape[1]))  # 图像位移
-        center = (224 + r_move_x, 224 + r_move_y)  # 绕位移后的图片中心进行旋转
-        scale = random.uniform(0.85, 1)  # 将图像缩放为100%
-        m_rotate = cv2.getRotationMatrix2D(center, r_rotate_angle, scale)  # 生成旋转矩阵
-        jpg = cv2.warpAffine(jpg, m_rotate, (jpg.shape[0], jpg.shape[1]))  # 图像旋转
+        jpg = erasing(jpg)  #  erasing image for 3 times
+        jpg = erasing(jpg)  #  erasing image for 3 times
+        jpg = erasing(jpg)  #  erasing image for 3 times
+        jpg = cv2.warpAffine(jpg, m_move, (jpg.shape[0], jpg.shape[1]))   
+        center = (224 + r_move_x, 224 + r_move_y)  
+        scale = random.uniform(0.85, 1)  
+        m_rotate = cv2.getRotationMatrix2D(center, r_rotate_angle, scale)  
+        jpg = cv2.warpAffine(jpg, m_rotate, (jpg.shape[0], jpg.shape[1]))   
         jpg = Image.fromarray(jpg)
         jpg = Distort(seed)(jpg)
         jpg = np.asarray(jpg)
         jpg = straug_auto(jpg, 0.5)
-        jpgs[i, 0, :, :] = jpg
-        jpgs[i, 1, :, :] = jpg
-        jpgs[i, 2, :, :] = jpg
+        jpgs[i,0,:,:] = jpg
+        jpgs[i,1,:,:] = jpg
+        jpgs[i,2,:,:] = jpg
         for j in range(labels.shape[1]):
-            label = labels[i, j, :, :].copy()
-            label = cv2.warpAffine(label, m_move, (label.shape[0], label.shape[1]))  # 图像位移
-            label = cv2.warpAffine(label, m_rotate, (label.shape[0], label.shape[1]))  # 图像旋转
+            label = labels[i,j,:,:].copy()
+            label = cv2.warpAffine(label, m_move, (label.shape[0], label.shape[1]))  
+            label = cv2.warpAffine(label, m_rotate, (label.shape[0], label.shape[1]))   
             label = Image.fromarray(label)
             label = Distort(seed)(label)
             label = np.asarray(label)
-            labels[i, j, :, :] = label
-    return jpgs, labels
-
-
+            labels[i,j,:,:] = label
+    return jpgs,labels
 class UnetDataset(Dataset):
     def __init__(self, annotation_lines, input_shape, num_classes, train, dataset_path):
         super(UnetDataset, self).__init__()
@@ -192,18 +187,18 @@ class UnetDataset(Dataset):
         self.input_shape = input_shape
         self.num_classes = num_classes
         self.train = train
-        #self.dataset_path = '/data1/Datasets/Seg/Ribseg/images'
-        self.dataset_path = "Datasets/img/"
+        #self.dataset_path = '/path/to/vinxray/img'
+
         self.transform = transforms.Compose([
-            transforms.ToPILImage(),  # 将图像变成PIL格式    输入为[H, W, C]输出为[H, W, C]
-            # transforms.Resize(256),  # 把图片resize到给定的尺寸
-            # transforms.RandomCrop(224),  # 以输入图的随机位置为中心做指定size的裁剪操作
+            transforms.ToPILImage(),   
+            # transforms.Resize(256), 
+            # transforms.RandomCrop(224), 
             # transforms.Resize(self.input_shape),
-            # transforms.RandomHorizontalFlip(),  # 以0.5概率水平翻转给定的PIL图像
-            transforms.ToTensor(),  # 将PIL图像转换为tensor    输入为[H, W, C]输出为[C, H, W]
+            # transforms.RandomHorizontalFlip(), 
+            transforms.ToTensor(), 
             # transforms.Normalize((0.485, 0.456, 0.406),
             #                      (0.229, 0.224, 0.225))
-        ])
+            ])
 
     def __len__(self):
         return self.length
@@ -213,52 +208,52 @@ class UnetDataset(Dataset):
         name = annotation_line.split()[0]
         r_move_x = random.randint(-20, 20)
         r_move_y = random.randint(-20, 20)
-        r_rotate_angle = random.randint(-10, 10)  # 旋转方向取（-10，10）中的随机整数值，正为逆时针，负为顺势针
-        m_move = np.float32([[1, 0, r_move_x], [0, 1, r_move_y]])  # 生成位移矩阵
+        r_rotate_angle = random.randint(-10, 10)
+        m_move = np.float32([[1, 0, r_move_x], [0, 1, r_move_y]])  
         random_flag_erasing = random.uniform(0, 1)
         random_flag_move = random.uniform(0, 1)
         random_flag_rotate = random.uniform(0, 1)
         random_flag_distota = random.uniform(0, 1)
         random_flag_str = random.uniform(0, 1)
         seed = random.randint(0, 1000000)
-        # -------------------------------#
-        #   从文件中读取图像
-        # -------------------------------#
-        jpg = cv2.imread(os.path.join(self.dataset_path, name), 0)
-        #jpg = cv2.imread(os.path.join(self.dataset_path, name + ".jpg"), 0)
-        jpg = cv2.resize(jpg, self.input_shape)  # [448, 448]
+
+        jpg = cv2.imread(os.path.join(self.dataset_path, name + ".jpg"), 0)
+
+
+
+        #jpg = cv2.imread(os.path.join(self.dataset_path, name), 0)
+        jpg = cv2.resize(jpg, self.input_shape)       # [448, 448]
         if random_flag_erasing > 0.5:
-            jpg = erasing(jpg)  # erasing image for 3 times
-            jpg = erasing(jpg)  # erasing image for 3 times
-            jpg = erasing(jpg)  # erasing image for 3 times
-            # cv2.imwrite('pass.jpg', jpg)
+            jpg = erasing(jpg)  #  erasing image for 3 times
+            jpg = erasing(jpg)  #  erasing image for 3 times
+            jpg = erasing(jpg)  #  erasing image for 3 times
+            #cv2.imwrite('pass.jpg', jpg)
         if random_flag_move > 0.5:
-            jpg = cv2.warpAffine(jpg, m_move, (jpg.shape[0], jpg.shape[1]))  # 图像位移
+            jpg = cv2.warpAffine(jpg, m_move, (jpg.shape[0], jpg.shape[1]))
         if random_flag_rotate > 0.5:
-            center = (224 + r_move_x, 224 + r_move_y)  # 绕位移后的图片中心进行旋转
-            scale = random.uniform(0.85, 1)  # 将图像缩放为100%
-            m_rotate = cv2.getRotationMatrix2D(center, r_rotate_angle, scale)  # 生成旋转矩阵
-            jpg = cv2.warpAffine(jpg, m_rotate, (jpg.shape[0], jpg.shape[1]))  # 图像旋转
+            center = (224 + r_move_x, 224 + r_move_y) 
+            scale = random.uniform(0.85, 1)
+            m_rotate = cv2.getRotationMatrix2D(center, r_rotate_angle, scale)  
+            jpg = cv2.warpAffine(jpg, m_rotate, (jpg.shape[0], jpg.shape[1])) 
         if random_flag_distota > 0.7:
             jpg = Image.fromarray(jpg)
             jpg = Distort(seed)(jpg)
             jpg = np.asarray(jpg)
         if random_flag_str > 0.5:
             jpg = straug_auto(jpg, 0.5)
-        # cv2.imwrite("flag.jpg", jpg)
+        #cv2.imwrite("flag.jpg", jpg)
 
-        jpg = np.expand_dims(jpg, -1).repeat(3, axis=-1)  # [448, 448, 3]
+        jpg = np.expand_dims(jpg, -1).repeat(3, axis=-1)      # [448, 448, 3]
         jpg = self.transform(jpg)
 
         label_list = []
         for i in range(self.num_classes):
-
-            label = cv2.imread(os.path.join('Dataset/labels', str(i), name), 0)
+            label = cv2.imread(os.path.join('/path/to/vinxray/labels', str(i), name), 0)
             label = cv2.resize(label, self.input_shape, interpolation=cv2.INTER_NEAREST)  # [448, 448]
             if random_flag_move > 0.5:
-                label = cv2.warpAffine(label, m_move, (label.shape[0], label.shape[1]))  # 图像位移
+                label = cv2.warpAffine(label, m_move, (label.shape[0], label.shape[1]))  
             if random_flag_rotate > 0.5:
-                label = cv2.warpAffine(label, m_rotate, (label.shape[0], label.shape[1]))  # 图像旋转
+                label = cv2.warpAffine(label, m_rotate, (label.shape[0], label.shape[1])) 
             if random_flag_distota > 0.7:
                 label = Image.fromarray(label)
                 label = Distort(seed)(label)
@@ -266,52 +261,13 @@ class UnetDataset(Dataset):
             label = label.copy()
             label[label > 125] = 255
             label[label <= 125] = 0
-            label = label / 255  # 映射到0、1区间
+            label = label / 255
             label_list.append(label)
         seg_labels = np.stack(label_list, axis=0)
 
-        ovelaplabel_list = []
-        for i in range(self.num_classes):
-            label = cv2.imread(os.path.join('Dataset/label/overlap', str(i), name), 0)
 
-            label = cv2.resize(label, self.input_shape, interpolation=cv2.INTER_NEAREST)  # [448, 448]
-            if random_flag_move > 0.5:
-                label = cv2.warpAffine(label, m_move, (label.shape[0], label.shape[1]))  # 图像位移
-            if random_flag_rotate > 0.5:
-                label = cv2.warpAffine(label, m_rotate, (label.shape[0], label.shape[1]))  # 图像旋转
-            if random_flag_distota > 0.7:
-                label = Image.fromarray(label)
-                label = Distort(seed)(label)
-                label = np.asarray(label)
-            label = label.copy()
-            label[label > 125] = 255
-            label[label <= 125] = 0
-            label = label / 255
-            ovelaplabel_list.append(label)
-        ovelapseg_labels = np.stack(label_list, axis=0)
+        return jpg, seg_labels
 
-        nonovelaplabel_list = []
-        for i in range(self.num_classes):
-            label = cv2.imread(os.path.join('Dataset/label/nonoverlap',str(i), name), 0)
-
-            label = cv2.resize(label, self.input_shape, interpolation=cv2.INTER_NEAREST)  # [448, 448]
-            if random_flag_move > 0.5:
-                label = cv2.warpAffine(label, m_move, (label.shape[0], label.shape[1]))  # 图像位移
-            if random_flag_rotate > 0.5:
-                label = cv2.warpAffine(label, m_rotate, (label.shape[0], label.shape[1]))  # 图像旋转
-            if random_flag_distota > 0.7:
-                label = Image.fromarray(label)
-                label = Distort(seed)(label)
-                label = np.asarray(label)
-            label = label.copy()
-            label[label > 125] = 255
-            label[label <= 125] = 0
-            label = label / 255
-            nonovelaplabel_list.append(label)
-        nonovelapseg_labels = np.stack(label_list, axis=0)
-
-
-        return jpg, seg_labels,ovelapseg_labels,nonovelapseg_labels
 
     def rand(self, a=0, b=1):
         return np.random.rand() * (b - a) + a
@@ -319,10 +275,8 @@ class UnetDataset(Dataset):
     def get_random_data(self, image, label, input_shape, jitter=.3, hue=.1, sat=0.7, val=0.3, random=True):
         image = cvtColor(image)
         label = Image.fromarray(label)
-        # label   = Image.fromarray(np.array(label))
-        # ------------------------------#
-        #   获得图像的高宽与目标高宽
-        # ------------------------------#
+
+
         iw, ih = image.size
         h, w = input_shape
 
@@ -341,9 +295,6 @@ class UnetDataset(Dataset):
             new_label.paste(label, ((w - nw) // 2, (h - nh) // 2))
             return new_image, new_label
 
-        # ------------------------------------------#
-        #   对图像进行缩放并且进行长和宽的扭曲
-        # ------------------------------------------#
         new_ar = iw / ih * self.rand(1 - jitter, 1 + jitter) / self.rand(1 - jitter, 1 + jitter)
         scale = self.rand(0.25, 2)
         if new_ar < 1:
@@ -355,17 +306,13 @@ class UnetDataset(Dataset):
         image = image.resize((nw, nh), Image.BICUBIC)
         label = label.resize((nw, nh), Image.NEAREST)
 
-        # ------------------------------------------#
-        #   翻转图像
-        # ------------------------------------------#
+
         flip = self.rand() < .5
         if flip:
             image = image.transpose(Image.FLIP_LEFT_RIGHT)
             label = label.transpose(Image.FLIP_LEFT_RIGHT)
 
-        # ------------------------------------------#
-        #   将图像多余的部分加上灰条
-        # ------------------------------------------#
+
         dx = int(self.rand(0, w - nw))
         dy = int(self.rand(0, h - nh))
         new_image = Image.new('RGB', (w, h), (128, 128, 128))
@@ -393,25 +340,14 @@ class UnetDataset(Dataset):
         return image_data, label
 
 
-# DataLoader中collate_fn使用
+
 def unet_dataset_collate(batch):
     images = []
     pngs = []
-    overpngs = []
-    nonoverpngs = []
-
-    for img, png, overpng,nonoverpng in batch:
-        # images.append(img)      # 不使用归一化代码时
+    for img, png,sampng in batch:
         images.append(img.numpy())
         pngs.append(png)
-        overpngs.append(overpng)
-        nonoverpngs.append(nonoverpng)
-
     images = torch.from_numpy(np.array(images)).type(torch.FloatTensor)
     pngs = torch.from_numpy(np.array(pngs)).long()
-    overpngs = torch.from_numpy(np.array(overpngs)).long()
 
-    nonoverpngs = torch.from_numpy(np.array(nonoverpngs)).long()
-
-
-    return images, pngs, overpngs, nonoverpngs
+    return images, pngs
