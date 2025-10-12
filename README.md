@@ -12,7 +12,7 @@ cd LTSeg/
 ```
 
 ## Prepare Datasets
-You can refer to the  [https://vindr.ai/ribcxr](https://vindr.ai/ribcxr)](https://vindr.ai/ribcxr)
+You can refer to the  [https://vindr.ai/ribcxr]
 
 After applying for the dataset, label processing is performed through json2img.py
 
