@@ -19,8 +19,8 @@ After applying for the dataset, label processing is performed through json2img.p
 ## Requirements
  
 ```shell
-conda create -n tpl python=3.7.16
-conda activate tpl
+conda create -n lts python=3.7.16
+conda activate lts
 pip install -r requirements.txt
 ```
 
