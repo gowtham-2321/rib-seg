@@ -93,7 +93,7 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
         elif loss_fuc == "Diceloss":
             loss = Dice_loss(outputs, pngs)
 
-        elif loss_fuc == "TPCloss":
+        elif loss_fuc == "LTSloss":
 
             sigoutputs = torch.sigmoid(outputs.clone())
             pred_binary = sigoutputs * 255
@@ -180,7 +180,7 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
                 loss = CE_Loss(outputs, pngs)
             elif loss_fuc == "Diceloss":
                 loss = Dice_loss(outputs, pngs)
-            elif loss_fuc == "TPCloss":
+            elif loss_fuc == "LTSloss":
                 loss = Dice_loss(outputs, pngs)
             val_loss += loss.item()
 
