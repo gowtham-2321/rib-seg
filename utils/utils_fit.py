@@ -1,4 +1,4 @@
-from nets.unet_training import CE_Loss, Dice_loss, focal_loss, Boudaryloss
+from nets.unet_training import CE_Loss, Dice_loss,  
 from tqdm import tqdm
 import torch.nn.functional as F
 import os
@@ -11,54 +11,7 @@ from utils.utils_metrics import f_score
 from utils.dataloader import augmentationimage as ugmentationimage
 from utils.TI_loss import TI_Loss
 
-
-def trainDice_loss(inputs, targets, criticals_map, smooth=0.00001):
-    inputs = torch.sigmoid(inputs)
-
-    a, b, c, d = inputs.size()
-    sums = []
-    for i in range(a):
-        for j in range(b):
-            img = inputs[i, j, :, :]
-            label = targets[i, j, :, :]
-            map = criticals_map[i, j, :, :]
-            img = img * map * 0.3 + img
-            label = label * map * 0.3 + label
-            intersection = (img * label).sum()
-            sums.append(1 - (2. * intersection + smooth) / (img.sum() + label.sum() + smooth))
-    return sum(sums) / len(sums)
-
-class focalpixel(nn.Module):
-    def __init__(self, gamma=2, alpha=0.75):
-        super(focalpixel, self).__init__()
-        self.gamma = gamma
-        self.alpha = alpha
-    def forward(self, inputs, target):
-        pred_sigmoid = inputs.sigmoid()
-        target = target.type_as(inputs)
-        pt = (1 - pred_sigmoid) * target + pred_sigmoid * (1 - target)
-        focal_weight = (self.alpha * target + (1 - self.alpha) * (1 - target)) * pt.pow(self.gamma)
-        loss = F.binary_cross_entropy_with_logits(inputs, target, reduction='none') * focal_weight
-        return loss
-
-
-def ACE_Loss(inputs, target):
-    CE_loss = nn.BCEWithLogitsLoss()(inputs.float(), target.float())
-    return CE_loss
-
-
-def cepixel(inputs, target):
-    CE_loss = nn.BCEWithLogitsLoss(reduction='none')(inputs.float(), target.float())
-    return CE_loss
-
-
-def dicepixel(inputs, targets, smooth=0.00001):
-    inputs = torch.sigmoid(inputs)
-    intersection = inputs * targets
-    dice_loss_per_pixel = 1 - (2. * intersection + smooth) / (inputs + targets + smooth)
-    return dice_loss_per_pixel
-
-
+ 
 
 def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, epoch, epoch_step, epoch_step_val, gen,
                   gen_val, Epoch, loss_fuc, num_classes, save_dir, no_improve_count):
