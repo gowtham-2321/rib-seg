@@ -70,9 +70,14 @@ def build_argparser():
     parser.add_argument('--data_path', type=str, default='/kaggle/input/data-split-file',
                          help='folder containing train.txt / val.txt split lists')
     parser.add_argument('--image_path', type=str, default='/kaggle/input/dataset/images',
-                         help='folder of input images (files named <name>.jpg)')
+                         help='folder of TRAINING input images')
     parser.add_argument('--labels_path', type=str, default=None,
-                         help='folder of per-rib label masks (defaults to <image_path>/labels)')
+                         help='folder of TRAINING per-rib label masks (defaults to <image_path>/labels)')
+    parser.add_argument('--val_image_path', type=str, default=None,
+                         help='folder of VALIDATION input images (defaults to --image_path, for '
+                              'datasets that keep train/val images in the same folder)')
+    parser.add_argument('--val_labels_path', type=str, default=None,
+                         help='folder of VALIDATION per-rib label masks (defaults to --labels_path)')
     parser.add_argument('--save_dir', type=str, default='/kaggle/working/runs',
                          help='must be under /kaggle/working - it\'s the only writable, persisted directory')
 
@@ -131,6 +136,8 @@ def main():
 
     num_classes = args.num_classes or DATASET_NUM_CLASSES[args.dataset]
     labels_path = args.labels_path or os.path.join(args.image_path, "labels")
+    val_image_path = args.val_image_path or args.image_path
+    val_labels_path = args.val_labels_path or labels_path
     input_shape = (args.img_size, args.img_size)
 
     model = build_model(args, num_classes)
@@ -184,9 +191,9 @@ def main():
     epoch_step_val = max(1, num_val // args.batch_size)
 
     train_dataset = UnetDataset(train_lines, input_shape, num_classes, True, args.image_path, labels_path)
-    val_dataset = UnetDataset(val_lines, input_shape, num_classes, False, args.image_path, labels_path)
+    val_dataset = UnetDataset(val_lines, input_shape, num_classes, False, val_image_path, val_labels_path)
 
-    eval_callback = EvalCallback(model, input_shape, num_classes, val_lines, args.image_path, save_dir, cuda)
+    eval_callback = EvalCallback(model, input_shape, num_classes, val_lines, val_image_path, save_dir, cuda)
 
     no_improve_count = 0
     for epoch in range(args.epochs):
