@@ -45,7 +45,27 @@ def main():
     for i in range(len(data)):
         img_relative_path = data['img'][i]
         img_name = os.path.basename(img_relative_path)
-        img_path = os.path.join(args.images_base_path, img_relative_path)
+
+        # FIX: the JSON's "img" field is a relative path (e.g.
+        # "data/train/img/foo.png"), but the folder actually on disk
+        # can differ in case (Kaggle's VinDr-RibCXR packaging uses
+        # "Data" with a capital D) or layout - a case-sensitive
+        # filesystem then fails a literal join. Try the path exactly
+        # as the JSON gives it first (for a layout that matches), and
+        # fall back to just the basename under images_base_path (for
+        # when --images_base_path already points straight at the
+        # split's img/ folder, which is the common case on Kaggle).
+        candidates = [
+            os.path.join(args.images_base_path, img_relative_path),
+            os.path.join(args.images_base_path, img_name),
+        ]
+        img_path = next((p for p in candidates if os.path.exists(p)), None)
+        if img_path is None:
+            raise FileNotFoundError(
+                f"Could not find image for '{img_relative_path}'. Tried:\n  "
+                + "\n  ".join(candidates)
+                + "\nCheck --images_base_path."
+            )
 
         img = Image.open(img_path).convert('RGB')
         img = np.asarray(img, dtype=np.uint8)
