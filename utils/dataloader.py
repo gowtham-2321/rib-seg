@@ -225,7 +225,17 @@ class UnetDataset(Dataset):
         random_flag_str = random.uniform(0, 1)
         seed = random.randint(0, 1000000)
 
-        jpg = cv2.imread(os.path.join(self.dataset_path, name + ".jpg"), 0)
+        # FIX: this used to hardcode name + ".jpg", which breaks on any
+        # dataset shipping a different image format (e.g. VinDr-RibCXR
+        # as commonly packaged on Kaggle, which uses .png). Look the
+        # file up by prefix instead of assuming an extension.
+        img_matches = glob.glob(os.path.join(self.dataset_path, name + ".*"))
+        if not img_matches:
+            raise FileNotFoundError(
+                f"No image found for '{name}' under {self.dataset_path} "
+                f"(tried '{name}.*'). Check --image_path."
+            )
+        jpg = cv2.imread(img_matches[0], 0)
 
 
 
