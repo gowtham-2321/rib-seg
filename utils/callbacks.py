@@ -27,7 +27,7 @@ class LossHistory():
         if self.val_loss_flag:
             self.val_loss = []
 
-        os.makedirs(self.log_dir)
+        os.makedirs(self.log_dir, exist_ok=True)
 
 
     def append_loss(self, epoch, loss, val_loss=None):

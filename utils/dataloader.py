@@ -224,6 +224,8 @@ class UnetDataset(Dataset):
         random_flag_distota = random.uniform(0, 1)
         random_flag_str = random.uniform(0, 1)
         seed = random.randint(0, 1000000)
+        if not self.train:
+            random_flag_erasing = random_flag_move = random_flag_rotate = random_flag_distota = random_flag_str = 0
 
         # FIX: this used to hardcode name + ".jpg", which breaks on any
         # dataset shipping a different image format (e.g. VinDr-RibCXR
