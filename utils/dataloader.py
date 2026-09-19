@@ -1,4 +1,5 @@
 import os
+import glob
 import cv2
 import numpy as np
 import torch
@@ -180,14 +181,21 @@ def augmentationimage(jpgs,labels):
             labels[i,j,:,:] = label
     return jpgs,labels
 class UnetDataset(Dataset):
-    def __init__(self, annotation_lines, input_shape, num_classes, train, dataset_path):
+    def __init__(self, annotation_lines, input_shape, num_classes, train, dataset_path, labels_path=None):
         super(UnetDataset, self).__init__()
         self.annotation_lines = annotation_lines
         self.length = len(annotation_lines)
         self.input_shape = input_shape
         self.num_classes = num_classes
         self.train = train
-        #self.dataset_path = '/path/to/vinxray/img'
+        # FIX: this was commented out, so self.dataset_path did not
+        # exist and __getitem__ crashed with AttributeError immediately.
+        self.dataset_path = dataset_path
+        # FIX: labels used to be read from a hardcoded
+        # '/path/to/vinxray/labels' below. Defaults to
+        # <dataset_path>/labels; pass your own via train.py's
+        # --labels_path.
+        self.labels_path = labels_path if labels_path is not None else os.path.join(dataset_path, "labels")
 
         self.transform = transforms.Compose([
             transforms.ToPILImage(),   
@@ -248,7 +256,14 @@ class UnetDataset(Dataset):
 
         label_list = []
         for i in range(self.num_classes):
-            label = cv2.imread(os.path.join('/path/to/vinxray/labels', str(i), name), 0)
+            class_dir = os.path.join(self.labels_path, str(i))
+            matches = glob.glob(os.path.join(class_dir, name + "*"))
+            if not matches:
+                raise FileNotFoundError(
+                    f"No label mask found for image '{name}', class {i} under {class_dir}. "
+                    f"Check --labels_path / your json2img.py output layout."
+                )
+            label = cv2.imread(matches[0], 0)
             label = cv2.resize(label, self.input_shape, interpolation=cv2.INTER_NEAREST)  # [448, 448]
             if random_flag_move > 0.5:
                 label = cv2.warpAffine(label, m_move, (label.shape[0], label.shape[1]))  
@@ -344,7 +359,9 @@ class UnetDataset(Dataset):
 def unet_dataset_collate(batch):
     images = []
     pngs = []
-    for img, png,sampng in batch:
+    # FIX: __getitem__ only returns (img, png) - the third "sampng"
+    # element this used to unpack was never produced.
+    for img, png in batch:
         images.append(img.numpy())
         pngs.append(png)
     images = torch.from_numpy(np.array(images)).type(torch.FloatTensor)

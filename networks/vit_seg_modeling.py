@@ -18,8 +18,14 @@ from torch.nn.modules.utils import _pair
 from scipy import ndimage
 from . import vit_seg_configs as configs
 from .vit_seg_modeling_resnet_skip import ResNetV2
-from .Vit import VisionTransformer, Reconstruct
-from .pixlevel import PixLevelModule
+# FIX: removed `from .Vit import VisionTransformer, Reconstruct` and
+# `from .pixlevel import PixLevelModule`. networks/pixlevel.py does not
+# exist anywhere in this repo, so this file (and therefore train.py,
+# predict.py, predict_allmetric.py, predictunlabel.py - everything
+# that touches the network) could not even be imported. Both symbols
+# are dead code: never referenced below, and the imported
+# `VisionTransformer` is immediately shadowed by this file's own
+# `class VisionTransformer` further down.
 
 
 logger = logging.getLogger(__name__)

@@ -7,14 +7,23 @@ Chest X-ray (CXR) image examination is a primary tool for assessing thoracic abn
  
 ## Clone Repository
 ```shell
-git clone https://github.com/XWei98/LTSeg.git
-cd LTSeg/
+git clone https://github.com/gowtham-2321/rib-seg.git
+cd rib-seg/
 ```
 
-## Prepare Datasets
-You can refer to the  [https://vindr.ai/ribcxr]
+> See `FIXES.md` for a list of bugs found and fixed in this fork
+> (several scripts didn't run at all as originally released), and
+> `KAGGLE.md` for step-by-step Kaggle setup.
 
-After applying for the dataset, label processing is performed through json2img.py
+## Prepare Datasets
+You can refer to  [https://vindr.ai/ribcxr]
+
+After applying for the dataset, label processing is performed through json2img.py:
+```shell
+python json2img.py --annotations_json /path/to/Vindr_RibCXR_train_mask.json \
+    --images_base_path /path/to/Vxray --split train --output_dir /path/to/Vxray
+```
+Run once per split (train/val/test).
 
 ## Requirements
  
@@ -25,11 +34,24 @@ pip install -r requirements.txt
 ```
 
 ## Training
-CUDA_VISIBLE_DEVICES=0 python train.py 
-## Testing&Evaluation
-python predict.py
+```shell
+python train.py --dataset vindr --backbone transunet --loss_fuc TPCloss \
+    --data_path /path/to/split_lists --image_path /path/to/images --labels_path /path/to/labels \
+    --model_path model_data/imagenet21k+imagenet2012_R50+ViT-B_16.npz --save_dir ./runs
+```
+Run `python train.py --help` for every flag.
+
+## Testing & Evaluation
+```shell
+python predict.py --backbone transunet --num_classes 20 \
+    --model_path runs/.../best_epoch_weights.pth \
+    --image_dir /path/to/test/images --pred_save_path /path/to/predictions
+
+python predict_allmetric.py --pred_dir /path/to/predictions \
+    --gt_dir /path/to/labels --num_classes 20 --out_txt results.txt
+```
 ## Visualization
-python visrib.py
+python visrib.py *(edit the hardcoded paths at the top of the file first)*
 ## Citation and Star
 Please cite the following paper and star this project if you use this repository in your research. Thank you!
 ```

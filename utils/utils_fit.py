@@ -38,25 +38,16 @@ def trainDice_loss(inputs, target, criticals_map, beta=1, smooth=1e-5):
     connectivity/interactivity map (criticals_map), reconstructed loss --
     see note above.
     """
-    n, c, h, w = inputs.size()
-    nt, ht, wt, ct = target.size()
-    if h != ht or w != wt:
-        inputs = F.interpolate(inputs, size=(ht, wt), mode="bilinear", align_corners=True)
-
-    probs = torch.sigmoid(inputs)                       # [n, c, h, w]
-    probs = probs.permute(0, 2, 3, 1).contiguous()       # [n, h, w, c]
-    gt = target[..., :-1]                                # drop the "ignore/background" channel, matches Dice_loss
-
-    # criticals_map is [n, c, h, w] in utils_fit.py -> align to [n, h, w, c]
-    crit = criticals_map.permute(0, 2, 3, 1).contiguous()
-    crit = crit[..., :c]
+    probs = torch.sigmoid(inputs)      # [n, c, h, w]
+    target = target.float()
+    crit = criticals_map.float()       # already [n, c, h, w], matching inputs
 
     probs = probs * crit
-    gt = gt * crit
+    gt = target * crit
 
-    tp = torch.sum(gt * probs, dim=[0, 1, 2])
-    fp = torch.sum(probs, dim=[0, 1, 2]) - tp
-    fn = torch.sum(gt, dim=[0, 1, 2]) - tp
+    tp = torch.sum(gt * probs, dim=[0, 2, 3])
+    fp = torch.sum(probs, dim=[0, 2, 3]) - tp
+    fn = torch.sum(gt, dim=[0, 2, 3]) - tp
 
     score = ((1 + beta ** 2) * tp + smooth) / ((1 + beta ** 2) * tp + beta ** 2 * fn + fp + smooth)
     return 1 - torch.mean(score)
@@ -114,9 +105,9 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
             np_kernel = torch.tensor([[1, 1, 1, 1, 1],[1, 1, 1, 1, 1],[1, 1, 1, 1, 1],[1, 1, 1, 1, 1],[1, 1, 1, 1, 1]], dtype=torch.float32)
             connectivity_kernel = torch.unsqueeze(torch.unsqueeze(np_kernel, 0), 0).cuda()
 
-            for i in range(20):
-                copied_pred_overlap = pred_binary[:, i:i + 1, :, :].expand(-1, 20, -1, -1)
-                copied_true_binary = true_binary[:, i:i + 1, :, :].expand(-1, 20, -1, -1)
+            for i in range(num_classes):
+                copied_pred_overlap = pred_binary[:, i:i + 1, :, :].expand(-1, num_classes, -1, -1)
+                copied_true_binary = true_binary[:, i:i + 1, :, :].expand(-1, num_classes, -1, -1)
                 pred_overlap = copied_pred_overlap * true_binary
                 true_overlap = copied_true_binary * true_binary
                 rev_true_overlap = torch.logical_not(true_overlap)

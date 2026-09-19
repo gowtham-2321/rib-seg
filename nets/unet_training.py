@@ -7,16 +7,16 @@ import torch.nn.functional as F
 
 
 def CE_Loss(inputs, target, cls_weights=None, num_classes=21):
-    n, c, h, w = inputs.size()
-    nt, ht, wt = target.size()
-    if h != ht and w != wt:
-        inputs = F.interpolate(inputs, size=(ht, wt), mode="bilinear", align_corners=True)
-
-    temp_inputs = inputs.transpose(1, 2).transpose(2, 3).contiguous().view(-1, c)
-    temp_target = target.view(-1)
-
-    CE_loss  = nn.CrossEntropyLoss(weight=cls_weights, ignore_index=num_classes)(temp_inputs, temp_target)
-    return CE_loss
+    """
+    FIXED for multi-label rib segmentation. `target` here is
+    [B, C, H, W] with each channel an independent binary rib mask
+    (ribs overlap in the 2D projection, so this is NOT a one-class-
+    per-pixel problem) - not the [B, H, W] class-index format this
+    function originally assumed (whose `nt, ht, wt = target.size()`
+    crashes outright on a 4D tensor).
+    """
+    bce = nn.BCEWithLogitsLoss(weight=cls_weights)
+    return bce(inputs, target.float())
 
 def Focal_Loss(inputs, target, cls_weights, num_classes=21, alpha=0.5, gamma=2):
     n, c, h, w = inputs.size()
@@ -36,24 +36,31 @@ def Focal_Loss(inputs, target, cls_weights, num_classes=21, alpha=0.5, gamma=2):
     return loss
 
 def Dice_loss(inputs, target, beta=1, smooth = 1e-5):
-    n, c, h, w = inputs.size()
-    nt, ht, wt, ct = target.size()
-    if h != ht and w != wt:
-        inputs = F.interpolate(inputs, size=(ht, wt), mode="bilinear", align_corners=True)
-        
-    temp_inputs = torch.softmax(inputs.transpose(1, 2).transpose(2, 3).contiguous().view(n, -1, c),-1)
-    temp_target = target.view(n, -1, ct)
+    """
+    FIXED for multi-label rib segmentation. `target` here is
+    [B, C, H, W], each channel an independent binary rib mask - not
+    the [B, H, W, C+1] one-hot-plus-background-channel format this
+    function originally assumed. The original's `nt, ht, wt, ct =
+    target.size()` silently mis-parsed a [B, C, H, W] tensor's axes as
+    if it were [B, H, W, C] (no crash there, since it's still 4
+    numbers - just the wrong 4 numbers), which then produced a
+    tp/fp/fn broadcast-shape RuntimeError a few lines later. This
+    version treats every channel as an independent binary Dice term
+    via sigmoid, matching what utils/dataloader.py actually produces.
+    """
+    probs = torch.sigmoid(inputs)
+    target = target.float()
 
-    #--------------------------------------------#
-    #   计算dice loss
-    #--------------------------------------------#
-    tp = torch.sum(temp_target[...,:-1] * temp_inputs, axis=[0,1])
-    fp = torch.sum(temp_inputs                       , axis=[0,1]) - tp
-    fn = torch.sum(temp_target[...,:-1]              , axis=[0,1]) - tp
+    b, c = probs.shape[0], probs.shape[1]
+    probs_flat = probs.reshape(b, c, -1)
+    target_flat = target.reshape(b, c, -1)
+
+    tp = (probs_flat * target_flat).sum(-1)
+    fp = probs_flat.sum(-1) - tp
+    fn = target_flat.sum(-1) - tp
 
     score = ((1 + beta ** 2) * tp + smooth) / ((1 + beta ** 2) * tp + beta ** 2 * fn + fp + smooth)
-    dice_loss = 1 - torch.mean(score)
-    return dice_loss
+    return 1 - torch.mean(score)
 
 def weights_init(net, init_type='normal', init_gain=0.02):
     def init_func(m):

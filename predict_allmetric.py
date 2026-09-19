@@ -1,472 +1,117 @@
-import os
-import cv2
-import torch
-import numpy as np
+# predict_allmetric.py
+#
+# REWRITTEN. Had the same blocking bugs as predict.py (nonexistent
+# `SCNet` import, 4-tuple unpack of the model's output), plus a large
+# block of dead code reporting metrics broken down by clavicles,
+# scapulae, lungs, trachea and mediastinum - anatomical structures
+# that exist in neither VinDr-RibCXR's nor CXRS's rib-only label sets.
+#
+# Deliberately decoupled from inference: run predict.py first to
+# produce <pred_dir>/<class>/<image>.png masks, then point this script
+# at that folder plus a matching ground-truth folder (as produced by
+# json2img.py) to get the mIoU/mDSC/mSen/mSpec/mHD/mASSD numbers
+# reported in Table 1, per rib and averaged.
+#
+# Usage:
+#   python predict_allmetric.py --pred_dir /path/to/predictions \
+#       --gt_dir /path/to/labels --num_classes 20 --out_txt results.txt
 
-from torch import nn
-from tqdm import tqdm
-from torchvision import transforms
 import argparse
-from networks.vit_seg_modeling import SCNet as ViT_seg
-from networks.vit_seg_modeling import CONFIGS as CONFIGS_ViT_seg
+import glob
+import os
 
-import scipy
-from scipy.spatial.distance import directed_hausdorff, cdist
+import cv2
+import numpy as np
+from scipy.spatial.distance import cdist, directed_hausdorff
 
-
-
-def calmdsc(imgdir1, imgdir2):  # mdice
-    miou = 0
-    for img in os.listdir(imgdir1):
-        imgpath1 = os.path.join(imgdir1, img)
-        imgpath2 = os.path.join(imgdir2, img)
-        img1 = cv2.imread(imgpath1, 0)
-        img2 = cv2.imread(imgpath2, 0)
-        img1 = cv2.resize(img1, (448, 448))
-        img2 = cv2.resize(img2, (448, 448))
-        img1[img1 <= 125] = 0
-        img1[img1 > 125] = 1
-        img2[img2 <= 125] = 0
-        img2[img2 > 125] = 1
-        img1 = img1.astype(np.uint8)
-        img2 = img2.astype(np.uint8)
-        img3 = cv2.bitwise_and(img1, img2)
-        img4 = cv2.bitwise_or(img1, img2)
-        iou = 2 * img3.ravel().sum() / (img4.ravel().sum() + img3.ravel().sum()) if (
-                                                                                                img4.ravel().sum() + img3.ravel().sum()) != 0 else 0
-        miou = miou + iou
-    return miou / len(os.listdir(imgdir1))
+METRIC_NAMES = ["mIoU", "mDSC", "mSen", "mSpec", "mHD", "mASSD"]
 
 
-def calmiou(imgdir1, imgdir2):  # miou
-    miou = 0
-    mdsc = 0
-    for img in os.listdir(imgdir1):
-        imgpath1 = os.path.join(imgdir1, img)
-        imgpath2 = os.path.join(imgdir2, img)
-        img1 = cv2.imread(imgpath1, 0)
-        img2 = cv2.imread(imgpath2, 0)
-        img1 = cv2.resize(img1, (448, 448))
-        img2 = cv2.resize(img2, (448, 448))
-        img1[img1 <= 125] = 0
-        img1[img1 > 125] = 1
-        img2[img2 <= 125] = 0
-        img2[img2 > 125] = 1
-        img1 = img1.astype(np.uint8)
-        img2 = img2.astype(np.uint8)
-        img3 = cv2.bitwise_and(img1, img2)
-        img4 = cv2.bitwise_or(img1, img2)
-        iou = img3.ravel().sum() / img4.ravel().sum() if img4.ravel().sum() != 0 else 0
-        miou = miou + iou
-
-        dsc = 2 * img3.ravel().sum() / (img4.ravel().sum() + img3.ravel().sum()) if (
-                                                                                                img4.ravel().sum() + img3.ravel().sum()) != 0 else 0
-        mdsc = mdsc + dsc
-
-    return miou / len(os.listdir(imgdir1)), mdsc / len(os.listdir(imgdir1))
+def load_binary(path, size=448):
+    img = cv2.imread(path, 0)
+    img = cv2.resize(img, (size, size))
+    return (img > 125).astype(np.uint8)
 
 
-def calall(imgdir1, imgdir2):
- 
-    miou = mdsc = accuracy = specificity = sensitivity = 0
-    total_imgs = len(os.listdir(imgdir1))   
+def per_image_metrics(pred, gt):
+    pred_b = pred.astype(bool)
+    gt_b = gt.astype(bool)
 
-    for img in os.listdir(imgdir1):
-        imgpath1 = os.path.join(imgdir1, img)
-        imgpath2 = os.path.join(imgdir2, img)
-        img1 = cv2.imread(imgpath1, 0)
-        img2 = cv2.imread(imgpath2, 0)
-        img1 = cv2.resize(img1, (448, 448))
-        img2 = cv2.resize(img2, (448, 448))
-        img1[img1 <= 125] = 0
-        img1[img1 > 125] = 1
-        img2[img2 <= 125] = 0
-        img2[img2 > 125] = 1
-        img1 = img1.astype(np.uint8)
-        img2 = img2.astype(np.uint8)
+    inter = (pred_b & gt_b).sum()
+    union = (pred_b | gt_b).sum()
+    iou = inter / union if union else 1.0
+    denom = pred_b.sum() + gt_b.sum()
+    dsc = 2 * inter / denom if denom else 1.0
 
- 
-        img3 = cv2.bitwise_and(img1, img2)
-        img4 = cv2.bitwise_or(img1, img2)
-        iou = img3.ravel().sum() / img4.ravel().sum() if img4.ravel().sum() != 0 else 0
-        miou += iou
-        dsc = 2 * img3.ravel().sum() / (img4.ravel().sum() + img3.ravel().sum()) if (img4.ravel().sum() + img3.ravel().sum()) != 0 else 0
-        mdsc += dsc
- 
-        tp = np.logical_and(img1 == 1, img2 == 1).sum()
-        tn = np.logical_and(img1 == 0, img2 == 0).sum()
-        fp = np.logical_and(img1 == 0, img2 == 1).sum()
-        fn = np.logical_and(img1 == 1, img2 == 0).sum()
+    tp = inter
+    tn = (~pred_b & ~gt_b).sum()
+    fp = (pred_b & ~gt_b).sum()
+    fn = (~pred_b & gt_b).sum()
+    sens = tp / (tp + fn) if (tp + fn) else 1.0
+    spec = tn / (tn + fp) if (tn + fp) else 1.0
 
- 
-        accuracy += (tp + tn) / (tp + tn + fp + fn)
-        specificity += tn / (tn + fp) if (tn + fp) != 0 else 0
-        sensitivity += tp / (tp + fn) if (tp + fn) != 0 else 0
+    y_t, x_t = np.where(gt_b)
+    y_p, x_p = np.where(pred_b)
+    if y_t.size and y_p.size:
+        pts_t = np.stack([y_t, x_t], axis=1)
+        pts_p = np.stack([y_p, x_p], axis=1)
+        hd = max(directed_hausdorff(pts_t, pts_p)[0], directed_hausdorff(pts_p, pts_t)[0])
+        d = cdist(pts_t, pts_p)
+        assd = (d.min(axis=0).mean() + d.min(axis=1).mean()) / 2
+    else:
+        hd, assd = 0.0, 0.0
+
+    return np.array([iou, dsc, sens, spec, hd, assd])
 
 
-    return miou / total_imgs, mdsc / total_imgs, accuracy / total_imgs, specificity / total_imgs, sensitivity / total_imgs
+def eval_class(pred_dir, gt_dir):
+    if not os.path.isdir(pred_dir):
+        raise FileNotFoundError(f"Missing prediction folder: {pred_dir}")
+    names = sorted(os.listdir(pred_dir))
+    totals = np.zeros(len(METRIC_NAMES))
+    n = 0
+    for name in names:
+        stem = os.path.splitext(name)[0]
+        gt_matches = glob.glob(os.path.join(gt_dir, stem + "*"))
+        if not gt_matches:
+            continue
+        pred = load_binary(os.path.join(pred_dir, name))
+        gt = load_binary(gt_matches[0])
+        totals += per_image_metrics(pred, gt)
+        n += 1
+    if n == 0:
+        raise RuntimeError(f"No matching (prediction, ground-truth) pairs found for {pred_dir} vs {gt_dir}")
+    return totals / n
 
 
-def calalll(imgdir1, imgdir2):
-    total_imgs = len(os.listdir(imgdir1))
-    if total_imgs == 0:
-        return 0, 0, 0, 0, 0, 0, 0  
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--pred_dir', type=str, required=True,
+                         help='root folder with one <class_idx>/ subfolder per rib (output of predict.py)')
+    parser.add_argument('--gt_dir', type=str, required=True,
+                         help='root folder with one <class_idx>/ subfolder per rib (output of json2img.py)')
+    parser.add_argument('--num_classes', type=int, default=20)
+    parser.add_argument('--out_txt', type=str, default=None, help='optional path to save a text report')
+    args = parser.parse_args()
 
-    miou = mdsc = accuracy = specificity = sensitivity = hausdorff_distance = assd = 0
+    per_class = []
+    lines = []
+    for c in range(args.num_classes):
+        m = eval_class(os.path.join(args.pred_dir, str(c)), os.path.join(args.gt_dir, str(c)))
+        per_class.append(m)
+        line = f"class {c}: " + ", ".join(f"{n}={v:.4f}" for n, v in zip(METRIC_NAMES, m))
+        print(line)
+        lines.append(line)
 
-    for img in os.listdir(imgdir1):
-        imgpath1 = os.path.join(imgdir1, img)
-        imgpath2 = os.path.join(imgdir2, img)
-        img1 = cv2.imread(imgpath1, 0)
-        img2 = cv2.imread(imgpath2, 0)
-        img1 = cv2.resize(img1, (448, 448))
-        img2 = cv2.resize(img2, (448, 448))
-        img1[img1 <= 125] = 0
-        img1[img1 > 125] = 1
-        img2[img2 <= 125] = 0
-        img2[img2 > 125] = 1
-        img1 = img1.astype(np.bool_)
-        img2 = img2.astype(np.bool_)
+    mean_m = np.mean(per_class, axis=0)
+    summary = "MEAN over all classes: " + ", ".join(f"{n}={v:.4f}" for n, v in zip(METRIC_NAMES, mean_m))
+    print(summary)
+    lines.append(summary)
 
-    
-        img3 = img1 & img2
-        img4 = img1 | img2
-        iou = img3.sum() / img4.sum() if img4.sum() != 0 else 0
-        miou += iou
-        dsc = 2 * img3.sum() / (img4.sum() + img3.sum()) if (img4.sum() + img3.sum()) != 0 else 0
-        mdsc += dsc
-
-      
-        tp = (img1 & img2).sum()
-        tn = (~img1 & ~img2).sum()
-        fp = (~img1 & img2).sum()
-        fn = (img1 & ~img2).sum()
-        accuracy += (tp + tn) / (tp + tn + fp + fn)
-        specificity += tn / (tn + fp) if (tn + fp) != 0 else 0
-        sensitivity += tp / (tp + fn) if (tp + fn) != 0 else 0
-
-
-        y_true, x_true = np.where(img1)
-        y_pred, x_pred = np.where(img2)
-        if y_true.size and y_pred.size: 
-            hausdorff_dist = max(
-                directed_hausdorff(np.stack([y_true, x_true], axis=1), np.stack([y_pred, x_pred], axis=1))[0],
-                directed_hausdorff(np.stack([y_pred, x_pred], axis=1), np.stack([y_true, x_true], axis=1))[0])
-        else:
-            hausdorff_dist = 0
-        hausdorff_distance += hausdorff_dist
-
-
-        if y_true.size and y_pred.size:  
-            true_points = np.stack([y_true, x_true], axis=1)
-            pred_points = np.stack([y_pred, x_pred], axis=1)
-            dist_matrix = scipy.spatial.distance.cdist(true_points, pred_points, 'euclidean')
-            assd += np.mean(np.min(dist_matrix, axis=0)) + np.mean(np.min(dist_matrix, axis=1))
-        else:
-            assd += 0
-
-    return miou / total_imgs, mdsc / total_imgs, accuracy / total_imgs, specificity / total_imgs, sensitivity / total_imgs, hausdorff_distance / total_imgs, assd / (
-                2 * total_imgs)
-
-
-def cal_metrics(imgdir1, imgdir2):  # miou, mdsc, sensitivity, specificity, precision, recall
-    miou = 0
-    mdsc = 0
-    sensitivity = 0
-    specificity = 0
-    precision = 0
-    recall = 0
-    hausdorff_distance = 0
-    assd = 0
-    total_imgs = len(os.listdir(imgdir1))  
-    for img in os.listdir(imgdir1):
-        imgpath1 = os.path.join(imgdir1, img)
-        imgpath2 = os.path.join(imgdir2, img)
-        img1 = cv2.imread(imgpath1, 0)
-        img2 = cv2.imread(imgpath2, 0)
-        img1 = cv2.resize(img1, (448, 448))
-        img2 = cv2.resize(img2, (448, 448))
-        img1[img1 <= 125] = 0
-        img1[img1 > 125] = 1
-        img2[img2 <= 125] = 0
-        img2[img2 > 125] = 1
-        img1 = img1.astype(np.uint8)
-        img2 = img2.astype(np.uint8)
-
-        img3 = cv2.bitwise_and(img1, img2)
-        img4 = cv2.bitwise_or(img1, img2)
-
-        # Intersection over Union
-        iou = img3.ravel().sum() / img4.ravel().sum() if img4.ravel().sum() != 0 else 0
-        miou = miou + iou
-
-        # Dice Similarity Coefficient
-        dsc = 2 * img3.ravel().sum() / (img1.ravel().sum() + img2.ravel().sum()) if (
-                                                                                            img1.ravel().sum() + img2.ravel().sum()) != 0 else 0
-        mdsc = mdsc + dsc
-
-        # True Positives, False Positives, True Negatives, False Negatives
-        TP = img3.ravel().sum()
-        FP = img2.ravel().sum() - TP
-        FN = img1.ravel().sum() - TP
-        TN = img1.size - (TP + FP + FN)
-
-        # Sensitivity / Recall
-        recall_img = TP / (TP + FN) if (TP + FN) != 0 else 0
-        recall += recall_img
-
-        # Specificity
-        specificity_img = TN / (TN + FP) if (TN + FP) != 0 else 0
-        specificity += specificity_img
-
-        # Precision
-        precision_img = TP / (TP + FP) if (TP + FP) != 0 else 0
-        precision += precision_img
-
-        # Sensitivity
-        sensitivity_img = recall_img  # Sensitivity is the same as recall
-        sensitivity += sensitivity_img
-
-        y_true, x_true = np.where(img1)
-        y_pred, x_pred = np.where(img2)
-        if y_true.size and y_pred.size:  
-            hausdorff_dist = max(
-                directed_hausdorff(np.stack([y_true, x_true], axis=1), np.stack([y_pred, x_pred], axis=1))[0],
-                directed_hausdorff(np.stack([y_pred, x_pred], axis=1), np.stack([y_true, x_true], axis=1))[0])
-        else:
-            hausdorff_dist = 0
-        hausdorff_distance += hausdorff_dist
-
- 
-        if y_true.size and y_pred.size:  
-            true_points = np.stack([y_true, x_true], axis=1)
-            pred_points = np.stack([y_pred, x_pred], axis=1)
-            dist_matrix = scipy.spatial.distance.cdist(true_points, pred_points, 'euclidean')
-            assd += np.mean(np.min(dist_matrix, axis=0)) + np.mean(np.min(dist_matrix, axis=1))
-        else:
-            assd += 0
-
-    num_images = len(os.listdir(imgdir1))
-
-    return miou / num_images, mdsc / num_images, sensitivity / num_images, specificity / num_images, precision / num_images, recall / num_images, hausdorff_distance / total_imgs, assd / (
-                2 * total_imgs)
+    if args.out_txt:
+        with open(args.out_txt, "w") as f:
+            f.write("\n".join(lines))
 
 
 if __name__ == "__main__":
-    num_classes = 20
-    backbone = 'resnet50'
-    input_shape = (448, 448)
-
-    image_dir = '/data1/test'
-    save_pdir = '/ModelLabel'
-    modelsort = "/best"
-    model_path = save_pdir + modelsort +'_epoch_weights.pth'
-
-
-    pred_save_path = save_pdir + modelsort + '/pred_image'
-    miou_save = save_pdir + modelsort + '/pred_miou.txt'
-    mdsc_save = save_pdir + modelsort + '/pred_mdice.txt'
-    mspec_save = save_pdir + modelsort + '/pred_mspec.txt'
-    mprec_save = save_pdir + modelsort + '/pred_mprec.txt'
-    mrecall_save = save_pdir + modelsort + '/pred_mrecall.txt'
-    mhd_save = save_pdir + modelsort + '/pred_mhd.txt'
-    massd_save = save_pdir + modelsort + '/pred_assd.txt'
-    msen_save = save_pdir + modelsort + '/pred_msen.txt'
-
-    transform = transforms.Compose([
-        transforms.ToPILImage(),   
-        transforms.ToTensor(),   
-    ])
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--root_path', type=str,
-                        default='../data/Synapse/train_npz', help='root dir for data')
-    parser.add_argument('--dataset', type=str,
-                        default='Synapse', help='experiment_name')   
-    parser.add_argument('--list_dir', type=str,
-                        default='./lists/lists_Synapse', help='list dir')
-    parser.add_argument('--num_classes', type=int,
-                        default=30, help='output channel of network')
-    parser.add_argument('--max_iterations', type=int,
-                        default=30000, help='maximum epoch number to train')
-    parser.add_argument('--max_epochs', type=int,
-                        default=150, help='maximum epoch number to train')
-    parser.add_argument('--batch_size', type=int,
-                        default=1, help='batch_size per gpu')
-    parser.add_argument('--n_gpu', type=int, default=1, help='total gpu')
-    parser.add_argument('--deterministic', type=int, default=1,
-                        help='whether use deterministic training')
-    parser.add_argument('--base_lr', type=float, default=0.01,
-                        help='segmentation network learning rate')
-    parser.add_argument('--img_size', type=int,
-                        default=448, help='input patch size of network input')
-    parser.add_argument('--seed', type=int,
-                        default=1234, help='random seed')
-    parser.add_argument('--n_skip', type=int,
-                        default=3, help='using number of skip-connect, default is num')
-    parser.add_argument('--vit_name', type=str,
-                        default='R50-ViT-B_16', help='select one vit model')
-    parser.add_argument('--vit_patches_size', type=int,
-                        default=16, help='vit_patches_size, default is 16')
-    args = parser.parse_args()
-    config_vit = CONFIGS_ViT_seg[args.vit_name]
-    config_vit.n_classes = args.num_classes
-    config_vit.n_skip = args.n_skip
-    if args.vit_name.find('R50') != -1:
-        config_vit.patches.grid = (
-            int(args.img_size / args.vit_patches_size), int(args.img_size / args.vit_patches_size))
-    config_vit.n_patches = int(args.img_size / args.vit_patches_size) * int(args.img_size / args.vit_patches_size)
-    config_vit.h = int(args.img_size / args.vit_patches_size)
-    config_vit.w = int(args.img_size / args.vit_patches_size)
-    unet = ViT_seg(config_vit, img_size=448, num_classes=num_classes)
-
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    unet.load_state_dict(torch.load(model_path, map_location=device), strict=False)  
-    unet = unet.eval()   
-    unet = nn.DataParallel(unet)
-    unet = unet.cuda()
-
-    print(
-        '==============================================Predicted Image Save!==============================================')
-    for img in tqdm(os.listdir(image_dir)):
-        imgpath = os.path.join(image_dir, img)
-        image = cv2.imread(imgpath, 0)
-        image = cv2.resize(image, (448, 448))
-
- 
-        image = np.expand_dims(image, 0).repeat(3, axis=0)    # [3, 448, 448]
-        image = np.expand_dims(image, 0)                      # [b, 3, 448, 448]
-        image = torch.from_numpy(image).type(torch.FloatTensor)
- 
-        image = np.expand_dims(image, -1).repeat(3, axis=-1)  # [448, 448, 3]
-        image = transform(image)  # [3, 448, 448]
-        image = image.unsqueeze(0)  # [b, 3, 448, 448]
-
-        pred,overpred,nonover ,predx = unet(image)      # [b, num_classes, h, w]
-        pred = pred+overpred+nonover+predx
-
-        pred = pred.detach().cpu().numpy()
-        # pred = t_crf(image.cpu().numpy(), pred)    
-
-        for i in range(num_classes):
-            save_path = os.path.join(pred_save_path, str(i))
-            if not os.path.exists(save_path):
-                os.makedirs(save_path)
-            savepath = os.path.join(save_path, img)  
-
-            pred_image = pred[0, i, :, :]
-            pred_image = pred_image * 255
-            pred_image[pred_image <= 127] = 0
-            pred_image[pred_image > 127] = 255
-            pred_image = pred_image.astype(np.uint8)
-            cv2.imwrite(savepath, pred_image)
-    print('==================================================Compute  MIOU==================================================')
-    classes = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18','19',]
-    iou_list = []
-    iou_str_list = []
-    dsc_list = []
-    dsc_str_list = []
-    macc_list = []
-    macc_str_list = []
-    msen_list = []
-    msen_str_list = []
-    mspec_list = []
-    mspec_str_list = []
-    mprec_list = []
-    mprec_str_list = []
-    mrecall_list = []
-    mrecall_str_list = []
-    mhd_list = []
-    mhd_str_list = []
-    massd_list = []
-    massd_str_list = []
-
-    for cls in tqdm(classes):
-        imgpath = os.path.join(pred_save_path, cls)
-
-        labelpath = os.path.join('/Datasets/labels', cls)
-
-
-        miou, mdsc, msen, mspec, mprec, mrecall, mhd, massd = cal_metrics(imgpath, labelpath)
-        iou_list.append(miou)
-        miou_str = '第{}标签的miou: {}'.format(str(int(cls) + 1), miou)
-        iou_str_list.append(miou_str)
-
-        dsc_list.append(mdsc)
-        mdsc_str = '第{}标签的mdsc: {}'.format(str(int(cls) + 1), mdsc)
-        dsc_str_list.append(mdsc_str)
-
-        msen_list.append(msen)
-        msen_str = '第{}标签的msens: {}'.format(str(int(cls) + 1), msen)
-        msen_str_list.append(msen_str)
-
-        mspec_list.append(mspec)
-        mspec_str = '第{}标签的mspec: {}'.format(str(int(cls) + 1), mspec)
-        mspec_str_list.append(mspec_str)
-
-        mprec_list.append(mprec)
-        mprec_str = '第{}标签的mprec: {}'.format(str(int(cls) + 1), mprec)
-        mprec_str_list.append(mprec_str)
-
-        mrecall_list.append(mrecall)
-        mrecall_str = '第{}标签的mrecall: {}'.format(str(int(cls) + 1), mrecall)
-        mrecall_str_list.append(mrecall_str)
-
-        mhd_list.append(mhd)
-        mhd_str = '第{}标签的mhd: {}'.format(str(int(cls) + 1), mhd)
-        mhd_str_list.append(mhd_str)
-
-        massd_list.append(massd)
-        massd_str = '第{}标签的massd: {}'.format(str(int(cls) + 1), massd)
-        massd_str_list.append(massd_str)
-
-    mmiou_str = sum(iou_list) / len(iou_list)
-    miou_str = '\n'.join(iou_str_list) + '\n平均miou指标：' + str(mmiou_str)
-    print('平均指标：', mmiou_str)
-    with open(miou_save, 'w') as f:
-        f.write(miou_str)
-
-    mmdsc_str = sum(dsc_list) / len(dsc_list)
-    mdsc_str = '\n'.join(dsc_str_list) + '\n平均mdsc指标：' + str(mmdsc_str)
-    print('平均指标：', mmdsc_str)
-    with open(mdsc_save, 'w') as f:
-        f.write(mdsc_str)
-
-    mmsen_str = sum(msen_list) / len(msen_list)
-    msen_str = '\n'.join(msen_str_list) + '\n平均msens指标：' + str(mmsen_str)
-    print('平均指标：', mmsen_str)
-    with open(msen_save, 'w') as f:
-        f.write(msen_str)
-
-    mmspec_str = sum(mspec_list) / len(mspec_list)
-    mspec_str = '\n'.join(mspec_str_list) + '\n平均mspec指标：' + str(mmspec_str)
-    print('平均指标：', mmspec_str)
-    with open(mspec_save, 'w') as f:
-        f.write(mspec_str)
-
-    mmprec_str = sum(mprec_list) / len(mprec_list)
-    mprec_str = '\n'.join(mprec_str_list) + '\n平均mprec指标：' + str(mmprec_str)
-    print('平均指标：', mmprec_str)
-    with open(mprec_save, 'w') as f:
-        f.write(mprec_str)
-
-    mmrecall_str = sum(mrecall_list) / len(mrecall_list)
-    mrecall_str = '\n'.join(mrecall_str_list) + '\n平均mrecall指标：' + str(mmrecall_str)
-    print('平均指标：', mmrecall_str)
-    with open(mrecall_save, 'w') as f:
-        f.write(mrecall_str)
-
-    mmhd_str = sum(mhd_list) / len(mhd_list)
-    mhd_str = '\n'.join(mhd_str_list) + '\n平均mhd指标：' + str(mmhd_str)
-    print('平均指标：', mmhd_str)
-    with open(mhd_save, 'w') as f:
-        f.write(mhd_str)
-
-    mmassd_str = sum(massd_list) / len(massd_list)
-    massd_str = '\n'.join(massd_str_list) + '\n平均massd指标：' + str(mmassd_str)
-    print('平均指标：', mmassd_str)
-    with open(massd_save, 'w') as f:
-        f.write(massd_str)
-
-
-
+    main()
