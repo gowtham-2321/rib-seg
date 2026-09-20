@@ -168,7 +168,7 @@ def main():
         dataset=args.dataset, num_classes=num_classes, backbone=args.backbone,
         model_path=args.model_path, input_shape=input_shape, Epochs=args.epochs,
         batch_size=args.batch_size, Init_lr=args.init_lr, optimizer_type=args.optimizer_type,
-        momentum=args.momentum, lr_decay_type=args.lr_decay_type,
+        momentum=args.momentum, lr_decay_type=args.lr_decay_type, 
         num_workers=args.num_workers, num_train=num_train, num_val=num_val, loss_fuc=args.loss_fuc,
     )
 

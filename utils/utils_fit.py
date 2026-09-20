@@ -136,7 +136,7 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
             criticals_map[criticals_map <= 0] = 0
             criticals_map[criticals_map > 0] = 1
 
-            loss = trainDice_loss(outputs, pngs, criticals_map)
+            loss = Dice_loss(outputs, pngs) + 0.3 * trainDice_loss(outputs, pngs, criticals_map)
         else:
             raise ValueError(f"Unknown loss_fuc '{loss_fuc}'. Expected one of: BCEloss, Diceloss, LTSloss, TPCloss")
 
